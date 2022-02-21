@@ -1,18 +1,16 @@
 import shutil
 import tempfile
 
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django import forms
-from django.contrib.auth import get_user_model
 from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, Client, override_settings
 from django.urls import reverse
-from django.core.cache import cache
-
 
 from .. import views
-from ..models import Group, Post
-
+from ..models import Group, Post, Follow
 
 User = get_user_model()
 
@@ -256,3 +254,26 @@ class PostPagesTests(TestCase):
         post.delete()
         response = self.authorized_client.get(reverse('posts:index'))
         self.assertEqual(response.content, cached_response)
+
+    def test_following(self):
+        follower = User.objects.create_user(username='Fololo')
+        authorized_follower = Client()
+        authorized_follower.force_login(follower)
+
+        non_follower = User.objects.create_user(username='Not_Fololo')
+        authorized_non_follower = Client()
+        authorized_non_follower.force_login(non_follower)
+
+        authorized_follower.get(reverse('posts:profile_follow', kwargs={'username': self.author}))
+        following_count = Follow.objects.filter(author=self.author).count()
+        follower_response = authorized_follower.get(reverse('posts:follow_index'))
+        non_follower_response = authorized_non_follower.get(reverse('posts:follow_index'))
+        self.assertEqual(following_count, 1)
+        self.assertIn(self.post, follower_response.context.get('page_obj'))
+        self.assertNotIn(self.post, non_follower_response.context.get('page_obj'))
+
+        authorized_follower.get(reverse('posts:profile_unfollow', kwargs={'username': self.author}))
+        follow_count = Follow.objects.filter(author=self.author).count()
+        self.assertEqual(follow_count, 0)
+
+
