@@ -50,7 +50,6 @@ class PostPagesTests(TestCase):
                 image=uploaded
             )
 
-
         @classmethod
         def tearDownClass(cls):
             super().tearDownClass()
@@ -264,16 +263,34 @@ class PostPagesTests(TestCase):
         authorized_non_follower = Client()
         authorized_non_follower.force_login(non_follower)
 
-        authorized_follower.get(reverse('posts:profile_follow', kwargs={'username': self.author}))
-        following_count = Follow.objects.filter(author=self.author).count()
-        follower_response = authorized_follower.get(reverse('posts:follow_index'))
-        non_follower_response = authorized_non_follower.get(reverse('posts:follow_index'))
-        self.assertEqual(following_count, 1)
-        self.assertIn(self.post, follower_response.context.get('page_obj'))
-        self.assertNotIn(self.post, non_follower_response.context.get('page_obj'))
+        follow_post = Post.objects.create(
+            text='Фолловешный текст',
+            author=self.author,
+        )
 
-        authorized_follower.get(reverse('posts:profile_unfollow', kwargs={'username': self.author}))
+        authorized_follower.get(
+            reverse('posts:profile_follow',
+                    kwargs={'username': self.author})
+        )
+        following_count = (
+            Follow.objects.filter(author=self.author).count()
+        )
+        follower_response = (
+            authorized_follower.get(reverse('posts:follow_index'))
+        )
+        non_follower_response = (
+            authorized_non_follower.get(reverse('posts:follow_index'))
+        )
+        self.assertEqual(following_count, 1)
+        self.assertIn(follow_post, follower_response.context.get('page_obj'))
+        self.assertNotIn(
+            follow_post,
+            non_follower_response.context.get('page_obj')
+        )
+
+        authorized_follower.get(
+            reverse('posts:profile_unfollow',
+                    kwargs={'username': self.author})
+        )
         follow_count = Follow.objects.filter(author=self.author).count()
         self.assertEqual(follow_count, 0)
-
-

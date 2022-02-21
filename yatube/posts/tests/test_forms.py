@@ -70,7 +70,7 @@ class PostFormTests(TestCase):
             group=tested_post.group,
             author=tested_post.author,
             text=tested_post.text).exists()
-                        )
+        )
 
     def test_edit_post(self):
         old_post = self.post
