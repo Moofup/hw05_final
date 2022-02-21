@@ -4,7 +4,7 @@ from django.db.models import QuerySet
 from django.shortcuts import render, get_object_or_404, redirect
 
 from .forms import PostForm, CommentForm
-from .models import Group, Post, User
+from .models import Group, Post, User, Follow
 
 MAX_POST_DISPLAYED: int = 10
 
@@ -61,7 +61,8 @@ def profile(request, username):
 
     title = f'Все посты пользователя {author.username}'
     template = 'posts/profile.html'
-
+    user = request.user
+    following = user.is_authenticated and author.following.exists()
     author_posts_count = author.posts.count()
 
     context = {
@@ -69,6 +70,7 @@ def profile(request, username):
         'page_obj': page_obj,
         'title': title,
         'author_posts_count': author_posts_count,
+        'following': following,
     }
     return render(request, template, context)
 
@@ -139,30 +141,54 @@ def post_edit(request, post_id):
 def add_comment(request, post_id):
     post = Post.objects.get(pk=post_id)
     form = CommentForm(request.POST or None)
+    template = 'posts:post_detail'
     if form.is_valid():
         comment = form.save(commit=False)
         comment.author = request.user
         comment.post = post
         comment.save()
-    return redirect('posts:post_detail', post_id=post_id)
+    return redirect(template, post_id=post_id)
 
 
 @login_required
 def follow_index(request):
-    # информация о текущем пользователе доступна в переменной request.user
-    # ...
-    context = {}
-    return render(request, 'posts/follow.html', context)
+    posts = Post.objects.filter(author__following__user=request.user)
+    page_number = request.GET.get('page')
+    page_obj = get_page(page_number, posts)
+    template = 'posts/follow.html'
+    context = {'page_obj': page_obj}
+    return render(request, template, context)
 
 
 @login_required
 def profile_follow(request, username):
-    # Подписаться на автора
-    ...
+    author = get_object_or_404(User, username=username)
+    if author == request.user:
+        return redirect(
+            'posts:profile',
+            username=username
+        )
+    follower = Follow.objects.filter(
+        user=request.user,
+        author=author
+    ).exists()
+    if follower:
+        return redirect('posts:profile', username=username)
+    Follow.objects.create(user=request.user, author=author)
+    return redirect('posts:profile', username=username)
 
 
 @login_required
 def profile_unfollow(request, username):
-    # Дизлайк, отписка
-    context = {}
-    return render(request, 'posts/unfollow.html', context)
+    author = get_object_or_404(User, username=username)
+    if author == request.user:
+        return redirect(
+            'posts:profile',
+            username=username
+        )
+    following = get_object_or_404(Follow, user=request.user, author=author)
+    following.delete()
+    return redirect(
+        'posts:profile',
+        username=username
+    )
