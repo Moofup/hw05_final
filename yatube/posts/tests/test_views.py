@@ -295,5 +295,3 @@ class PostPagesTests(TestCase):
             follow_post,
             non_follower_response.context.get('page_obj')
         )
-
-
