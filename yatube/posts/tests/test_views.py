@@ -9,8 +9,8 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 
-from .. import views
 from ..models import Group, Post, Follow
+from ..utils import MAX_POST_DISPLAYED
 
 User = get_user_model()
 
@@ -56,6 +56,14 @@ class PostPagesTests(TestCase):
 
         cls.authorized_client = Client()
         cls.authorized_client.force_login(cls.author)
+
+        cls.follower = User.objects.create_user(username='Fololo')
+        cls.authorized_follower = Client()
+        cls.authorized_follower.force_login(cls.follower)
+        cls.authorized_follower.get(
+            reverse('posts:profile_follow',
+                    kwargs={'username': cls.author})
+        )
 
     def test_pages_uses_correct_template(self):
         """URL-адрес использует соответствующий шаблон."""
@@ -105,14 +113,14 @@ class PostPagesTests(TestCase):
         test_object = response.context.get('page_obj')[1]
         test_title = response.context['title']
         test_second_page_count = (
-            self.author.posts.count() % views.MAX_POST_DISPLAYED
+            self.author.posts.count() % MAX_POST_DISPLAYED
         )
         self.compare_objects(test_object)
         self.assertEqual(test_title, 'Последние обновления на сайте')
         self.assertIn(post, response.context.get('page_obj'))
         self.assertEqual(
             len(response.context['page_obj']),
-            views.MAX_POST_DISPLAYED
+            MAX_POST_DISPLAYED
         )
         response = self.client.get(reverse('posts:index') + '?page=2')
         self.assertEqual(
@@ -138,7 +146,7 @@ class PostPagesTests(TestCase):
         test_title = response.context['title']
         test_group = response.context['group']
         test_second_page_count = (
-            self.author.posts.count() % views.MAX_POST_DISPLAYED - 1
+            self.author.posts.count() % MAX_POST_DISPLAYED - 1
         )
         self.compare_objects(test_object)
         self.assertEqual(test_title, 'Записи сообщества Test-group')
@@ -146,7 +154,7 @@ class PostPagesTests(TestCase):
         self.assertNotIn(post, response.context.get('page_obj'))
         self.assertEqual(
             len(response.context['page_obj']),
-            views.MAX_POST_DISPLAYED
+            MAX_POST_DISPLAYED
         )
         response = (
             self.client.get(reverse(
@@ -185,7 +193,7 @@ class PostPagesTests(TestCase):
         test_author = response.context['author']
         test_post_count = response.context['author_posts_count']
         test_second_page_count = (
-            self.author.posts.count() % views.MAX_POST_DISPLAYED
+            self.author.posts.count() % MAX_POST_DISPLAYED
         )
         self.compare_objects(test_object)
         self.assertEqual(test_title, 'Все посты пользователя Nameless')
@@ -194,7 +202,7 @@ class PostPagesTests(TestCase):
         self.assertIn(post, response.context.get('page_obj'))
         self.assertEqual(
             len(response.context['page_obj']),
-            views.MAX_POST_DISPLAYED
+            MAX_POST_DISPLAYED
         )
         response = (
             self.client.get(reverse(
@@ -253,11 +261,33 @@ class PostPagesTests(TestCase):
         response = self.authorized_client.get(reverse('posts:index'))
         self.assertEqual(response.content, cached_response)
 
-    def test_following(self):
-        follower = User.objects.create_user(username='Fololo')
-        authorized_follower = Client()
-        authorized_follower.force_login(follower)
+    def test_follow_author(self):
+        following_count = (
+            Follow.objects.filter(author=self.author).count()
+        )
+        self.assertEqual(following_count, 1)
 
+    def test_authorized_follower_sees_post(self):
+        follow_post = Post.objects.create(
+            text='Фолловешный текст',
+            author=self.author,
+        )
+        follower_response = (
+            self.authorized_follower.get(reverse('posts:follow_index'))
+        )
+        self.assertIn(follow_post, follower_response.context.get('page_obj'))
+
+    def test_unfollow_author(self):
+        self.authorized_follower.get(
+            reverse('posts:profile_unfollow',
+                    kwargs={'username': self.author})
+        )
+        following_count = (
+            Follow.objects.filter(author=self.author).count()
+        )
+        self.assertEqual(following_count, 0)
+
+    def test_authorized_non_follower_does_not_see_post(self):
         non_follower = User.objects.create_user(username='Not_Fololo')
         authorized_non_follower = Client()
         authorized_non_follower.force_login(non_follower)
@@ -266,30 +296,12 @@ class PostPagesTests(TestCase):
             text='Фолловешный текст',
             author=self.author,
         )
-
-        authorized_follower.get(
-            reverse('posts:profile_follow',
-                    kwargs={'username': self.author})
-        )
-        following_count = (
-            Follow.objects.filter(author=self.author).count()
-        )
-        follower_response = (
-            authorized_follower.get(reverse('posts:follow_index'))
-        )
         non_follower_response = (
             authorized_non_follower.get(reverse('posts:follow_index'))
         )
-        self.assertEqual(following_count, 1)
-        self.assertIn(follow_post, follower_response.context.get('page_obj'))
         self.assertNotIn(
             follow_post,
             non_follower_response.context.get('page_obj')
         )
 
-        authorized_follower.get(
-            reverse('posts:profile_unfollow',
-                    kwargs={'username': self.author})
-        )
-        follow_count = Follow.objects.filter(author=self.author).count()
-        self.assertEqual(follow_count, 0)
+

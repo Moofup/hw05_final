@@ -1,20 +1,9 @@
 from django.contrib.auth.decorators import login_required
-from django.core.paginator import Paginator, Page
-from django.db.models import QuerySet
-from django.shortcuts import render, get_object_or_404, redirect
 
+from django.shortcuts import render, get_object_or_404, redirect
+from .utils import get_paginator
 from .forms import PostForm, CommentForm
 from .models import Group, Post, User, Follow
-
-MAX_POST_DISPLAYED: int = 10
-
-
-def get_page(page_number: int,
-             post_list: QuerySet,
-             max_displayed_posts: int = MAX_POST_DISPLAYED) -> Page:
-    paginator = Paginator(post_list, max_displayed_posts)
-    page_posts = paginator.get_page(page_number)
-    return page_posts
 
 
 def index(request):
@@ -23,7 +12,7 @@ def index(request):
         'group'
     )
     page_number = request.GET.get('page')
-    page_obj = get_page(page_number, post_list)
+    page_obj = get_paginator(page_number, post_list)
 
     title = 'Последние обновления на сайте'
     template = 'posts/index.html'
@@ -40,7 +29,7 @@ def group_posts(request, slug):
     group = get_object_or_404(Group, slug=slug)
     post_list = group.posts.select_related('author')
     page_number = request.GET.get('page')
-    page_obj = get_page(page_number, post_list)
+    page_obj = get_paginator(page_number, post_list)
 
     title = f'Записи сообщества {group.title}'
     template = 'posts/group_list.html'
@@ -57,7 +46,7 @@ def profile(request, username):
     author = get_object_or_404(User, username=username)
     post_list = author.posts.all()
     page_number = request.GET.get('page')
-    page_obj = get_page(page_number, post_list)
+    page_obj = get_paginator(page_number, post_list)
 
     title = f'Все посты пользователя {author.username}'
     template = 'posts/profile.html'
@@ -154,7 +143,7 @@ def add_comment(request, post_id):
 def follow_index(request):
     posts = Post.objects.filter(author__following__user=request.user)
     page_number = request.GET.get('page')
-    page_obj = get_page(page_number, posts)
+    page_obj = get_paginator(page_number, posts)
     template = 'posts/follow.html'
     context = {'page_obj': page_obj}
     return render(request, template, context)
