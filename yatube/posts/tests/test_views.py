@@ -111,12 +111,10 @@ class PostPagesTests(TestCase):
         )
         response = self.authorized_client.get(reverse('posts:index'))
         test_object = response.context.get('page_obj')[1]
-        test_title = response.context['title']
         test_second_page_count = (
             self.author.posts.count() % MAX_POST_DISPLAYED
         )
         self.compare_objects(test_object)
-        self.assertEqual(test_title, 'Последние обновления на сайте')
         self.assertIn(post, response.context.get('page_obj'))
         self.assertEqual(
             len(response.context['page_obj']),
@@ -143,13 +141,11 @@ class PostPagesTests(TestCase):
             reverse('posts:group_list',
                     kwargs={'slug': self.group.slug}))
         test_object = response.context.get('page_obj')[0]
-        test_title = response.context['title']
         test_group = response.context['group']
         test_second_page_count = (
             self.author.posts.count() % MAX_POST_DISPLAYED - 1
         )
         self.compare_objects(test_object)
-        self.assertEqual(test_title, 'Записи сообщества Test-group')
         self.assertEqual(test_group, self.group)
         self.assertNotIn(post, response.context.get('page_obj'))
         self.assertEqual(
@@ -189,14 +185,12 @@ class PostPagesTests(TestCase):
                 kwargs={'username': self.author.username}))
         )
         test_object = response.context.get('page_obj')[1]
-        test_title = response.context['title']
         test_author = response.context['author']
         test_post_count = response.context['author_posts_count']
         test_second_page_count = (
             self.author.posts.count() % MAX_POST_DISPLAYED
         )
         self.compare_objects(test_object)
-        self.assertEqual(test_title, 'Все посты пользователя Nameless')
         self.assertEqual(test_author, self.author)
         self.assertEqual(test_post_count, self.author.posts.count())
         self.assertIn(post, response.context.get('page_obj'))
@@ -220,11 +214,9 @@ class PostPagesTests(TestCase):
                 'posts:post_detail',
                 kwargs={'post_id': self.post.id}))
         )
-        test_title = response.context['title']
         test_post = response.context['post']
         test_post_count = response.context['author_posts_count']
         self.compare_objects(test_post)
-        self.assertEqual(test_title, self.post.text)
         self.assertEqual(test_post, self.post)
         self.assertEqual(test_post_count, self.post.author.posts.count())
 

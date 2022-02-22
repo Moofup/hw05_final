@@ -7,19 +7,17 @@ from .models import Group, Post, User, Follow
 
 
 def index(request):
-    post_list = Post.objects.select_related(
+    posts = Post.objects.select_related(
         'author',
         'group'
-    )
+    ).all()
     page_number = request.GET.get('page')
-    page_obj = get_paginator(page_number, post_list)
+    page_obj = get_paginator(page_number, posts)
 
-    title = 'Последние обновления на сайте'
     template = 'posts/index.html'
 
     context = {
         'page_obj': page_obj,
-        'title': title,
     }
 
     return render(request, template, context)
@@ -27,37 +25,36 @@ def index(request):
 
 def group_posts(request, slug):
     group = get_object_or_404(Group, slug=slug)
-    post_list = group.posts.select_related('author')
+    posts = group.posts.select_related('author')
     page_number = request.GET.get('page')
-    page_obj = get_paginator(page_number, post_list)
+    page_obj = get_paginator(page_number, posts)
 
-    title = f'Записи сообщества {group.title}'
     template = 'posts/group_list.html'
 
     context = {
         'group': group,
         'page_obj': page_obj,
-        'title': title,
     }
     return render(request, template, context)
 
 
 def profile(request, username):
     author = get_object_or_404(User, username=username)
-    post_list = author.posts.all()
+    posts = author.posts.all()
     page_number = request.GET.get('page')
-    page_obj = get_paginator(page_number, post_list)
+    page_obj = get_paginator(page_number, posts)
 
-    title = f'Все посты пользователя {author.username}'
     template = 'posts/profile.html'
-    user = request.user
-    following = user.is_authenticated and author.following.exists()
+    if request.user.is_authenticated:
+        following = Follow.objects.filter(user=request.user,
+                                          author=author).exists()
+    else:
+        following = False
     author_posts_count = author.posts.count()
 
     context = {
         'author': author,
         'page_obj': page_obj,
-        'title': title,
         'author_posts_count': author_posts_count,
         'following': following,
     }
@@ -69,10 +66,8 @@ def post_detail(request, post_id):
     author_posts_count = full_post.author.posts.count()
     form = CommentForm(request.POST or None)
     comments = full_post.comments.all()
-    title = full_post.text
     template = 'posts/post_detail.html'
     context = {
-        'title': title,
         'post': full_post,
         'author_posts_count': author_posts_count,
         'form': form,
@@ -110,15 +105,14 @@ def post_edit(request, post_id):
     if post.author != request.user:
         return redirect('posts:post_detail', post_id=post_id)
 
-    if request.method == 'POST':
-        form = PostForm(
-            request.POST or None,
-            files=request.FILES or None,
-            instance=post
-        )
-        if form.is_valid():
-            post.save()
-            return redirect('posts:post_detail', post.pk)
+    form = PostForm(
+        request.POST or None,
+        files=request.FILES or None,
+        instance=post
+    )
+    if form.is_valid():
+        post.save()
+        return redirect('posts:post_detail', post.pk)
 
     template = 'posts/create_post.html'
     is_edit = True
@@ -175,7 +169,7 @@ def profile_unfollow(request, username):
             'posts:profile',
             username=username
         )
-    following = get_object_or_404(Follow, user=request.user, author=author)
+    following = Follow.objects.filter(user=request.user, author=author)
     following.delete()
     return redirect(
         'posts:profile',
