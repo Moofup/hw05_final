@@ -1,7 +1,7 @@
 from django.contrib.auth.decorators import login_required
 
 from django.shortcuts import render, get_object_or_404, redirect
-from .utils import get_paginator
+from .utils import get_page_obj
 from .forms import PostForm, CommentForm
 from .models import Group, Post, User, Follow
 
@@ -11,8 +11,7 @@ def index(request):
         'author',
         'group'
     ).all()
-    page_number = request.GET.get('page')
-    page_obj = get_paginator(page_number, posts)
+    page_obj = get_page_obj(request, posts)
 
     template = 'posts/index.html'
 
@@ -26,9 +25,7 @@ def index(request):
 def group_posts(request, slug):
     group = get_object_or_404(Group, slug=slug)
     posts = group.posts.select_related('author')
-    page_number = request.GET.get('page')
-    page_obj = get_paginator(page_number, posts)
-
+    page_obj = get_page_obj(request, posts)
     template = 'posts/group_list.html'
 
     context = {
@@ -41,15 +38,13 @@ def group_posts(request, slug):
 def profile(request, username):
     author = get_object_or_404(User, username=username)
     posts = author.posts.all()
-    page_number = request.GET.get('page')
-    page_obj = get_paginator(page_number, posts)
+    page_obj = get_page_obj(request, posts)
 
     template = 'posts/profile.html'
+    following = False
     if request.user.is_authenticated:
         following = Follow.objects.filter(user=request.user,
                                           author=author).exists()
-    else:
-        following = False
     author_posts_count = author.posts.count()
 
     context = {
@@ -78,16 +73,14 @@ def post_detail(request, post_id):
 
 @login_required
 def post_create(request):
-    if request.method == 'POST':
-        form = PostForm(
-            request.POST or None,
-            files=request.FILES or None, )
-        if form.is_valid():
-            form = form.save(commit=False)
-            form.author = request.user
-            form.save()
-            return redirect('posts:profile', request.user)
-
+    form = PostForm(
+        request.POST or None,
+        files=request.FILES or None)
+    if form.is_valid():
+        form = form.save(commit=False)
+        form.author = request.user
+        form.save()
+        return redirect('posts:profile', request.user)
     form = PostForm()
 
     template = 'posts/create_post.html'
@@ -100,7 +93,6 @@ def post_create(request):
 @login_required
 def post_edit(request, post_id):
     post = get_object_or_404(Post, pk=post_id)
-    form = PostForm(request.POST or None, instance=post)
 
     if post.author != request.user:
         return redirect('posts:post_detail', post_id=post_id)
@@ -136,8 +128,7 @@ def add_comment(request, post_id):
 @login_required
 def follow_index(request):
     posts = Post.objects.filter(author__following__user=request.user)
-    page_number = request.GET.get('page')
-    page_obj = get_paginator(page_number, posts)
+    page_obj = get_page_obj(request, posts)
     template = 'posts/follow.html'
     context = {'page_obj': page_obj}
     return render(request, template, context)

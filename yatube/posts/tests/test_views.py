@@ -49,21 +49,18 @@ class PostPagesTests(TestCase):
                 image=uploaded
             )
 
-        @classmethod
-        def tearDownClass(cls):
-            super().tearDownClass()
-            shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
 
-        cls.authorized_client = Client()
-        cls.authorized_client.force_login(cls.author)
+    def setUp(self):
+        self.authorized_client = Client()
+        self.authorized_client.force_login(self.author)
 
-        cls.follower = User.objects.create_user(username='Fololo')
-        cls.authorized_follower = Client()
-        cls.authorized_follower.force_login(cls.follower)
-        cls.authorized_follower.get(
-            reverse('posts:profile_follow',
-                    kwargs={'username': cls.author})
-        )
+        self.follower = User.objects.create_user(username='Fololo')
+        self.authorized_follower = Client()
+        self.authorized_follower.force_login(self.follower)
 
     def test_pages_uses_correct_template(self):
         """URL-адрес использует соответствующий шаблон."""
@@ -254,15 +251,26 @@ class PostPagesTests(TestCase):
         self.assertEqual(response.content, cached_response)
 
     def test_follow_author(self):
-        following_count = (
+        before_follow_count = (
             Follow.objects.filter(author=self.author).count()
         )
-        self.assertEqual(following_count, 1)
+        self.authorized_follower.get(
+            reverse('posts:profile_follow',
+                    kwargs={'username': self.author})
+        )
+        after_follow_count = (
+            Follow.objects.filter(author=self.author).count()
+        )
+        self.assertNotEqual(before_follow_count, after_follow_count)
 
     def test_authorized_follower_sees_post(self):
         follow_post = Post.objects.create(
             text='Фолловешный текст',
             author=self.author,
+        )
+        self.authorized_follower.get(
+            reverse('posts:profile_follow',
+                    kwargs={'username': self.author})
         )
         follower_response = (
             self.authorized_follower.get(reverse('posts:follow_index'))
@@ -271,13 +279,20 @@ class PostPagesTests(TestCase):
 
     def test_unfollow_author(self):
         self.authorized_follower.get(
+            reverse('posts:profile_follow',
+                    kwargs={'username': self.author})
+        )
+        after_follow_count = (
+            Follow.objects.filter(author=self.author).count()
+        )
+        self.authorized_follower.get(
             reverse('posts:profile_unfollow',
                     kwargs={'username': self.author})
         )
-        following_count = (
+        after_unfollow_count = (
             Follow.objects.filter(author=self.author).count()
         )
-        self.assertEqual(following_count, 0)
+        self.assertNotEqual(after_follow_count, after_unfollow_count)
 
     def test_authorized_non_follower_does_not_see_post(self):
         non_follower = User.objects.create_user(username='Not_Fololo')
